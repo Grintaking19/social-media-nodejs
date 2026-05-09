@@ -8,7 +8,7 @@ const registerUser = async (req, res) => {
   // Implementation for user registration
   logger.info("Registration endpoint hit...");
   try {
-    const { error } = validateRegistration(req.body);
+    const { error, value } = validateRegistration(req.body);
     if (error) {
       logger.warn("Validation Error", error.details[0].message);
       return res.status(400).json({

@@ -20,8 +20,7 @@ const PORT = process.env.PORT || 3001;
 // Redis Client
 const redisClient = new Redis(process.env.REDIS_URL);
 
-// Routes
-app.use("/api/auth", authRoutes);
+
 
 // Connect to MongoDB
 connectDB()
@@ -90,6 +89,9 @@ app.use("/api/auth/register", sensitiveEndpointLimiter);
 
 // Apply Error Handler
 app.use(errorHandler);
+
+// Routes
+app.use("/api/auth", authRoutes);
 
 const server = app.listen(PORT, () => {
   logger.info(`Auth Service is running on Port ${PORT}`);
