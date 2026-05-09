@@ -1,0 +1,2 @@
+{"level":"info","message":"Auth Service is running on Port 3001","service":"auth-service","timestamp":"2026-05-09T22:58:08.425Z"}
+{"level":"info","message":"Connected to MongoDB successfully","service":"auth-service","timestamp":"2026-05-09T22:58:08.998Z"}
