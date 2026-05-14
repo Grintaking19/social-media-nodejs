@@ -25,6 +25,7 @@
     "ioredis": "^5.10.1",
     "jsonwebtoken": "^9.0.3",
     "rate-limit-redis": "^5.0.0",
+    "rate-limiter-flexible": "^11.1.0",
     "winston": "^3.19.0"
   }
 }
