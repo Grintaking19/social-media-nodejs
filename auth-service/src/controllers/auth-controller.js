@@ -5,6 +5,7 @@ import {
 } from "../validation/user.validation.js";
 import User from "../models/User.js";
 import generateToken from "../utils/generateToken.js";
+import RefreshToken from "../models/RefreshToken.js";
 
 // User Registration
 const registerUser = async (req, res) => {
@@ -109,7 +110,7 @@ const loginUser = async (req, res) => {
       userId: user._id,
     });
   } catch (error) {
-    logger.error("Registration Error Occured", error);
+    logger.error("Login Error Occured", error);
     res.status(500).json({
       success: false,
       message: "Internal Server Error",
@@ -118,7 +119,78 @@ const loginUser = async (req, res) => {
 };
 
 // Refresh Token
+const refreshTokenUser = async (req, res) => {
+  logger.info("Refresh Token Endpoint Hit ...");
+  try {
+    // Get your refresh Token
+    const { refreshToken } = req.body;
+    // if refresh token missing Error 400
+    if (!refreshToken) {
+      logger.warn("Refresh Token Missing in Request Body");
+      return res.status(400).json({
+        success: false,
+        message: "Refresh Token is required",
+      });
+    }
+    // Check your stored Token if exists or  Expired -> Logged warning and 401 Error
+    const storedRefreshToken = await RefreshToken.findOne({
+      token: refreshToken,
+    });
+
+    if (!storedRefreshToken || storedRefreshToken.expiresAt < new Date()) {
+      logger.warn(
+        `Refresh Token (${storedRefreshToken.token}) Doesn't Exists or Expired`,
+      );
+      return res.status(400).json({
+        success: false,
+        message: "Refresh Token doesn't Exist or Expired",
+      });
+    }
+    // Check if token's user still exists
+    const user = await User.findById(storedRefreshToken.user);
+    if (!user) {
+      return res.status(400).json({
+        success: false,
+        message: "Refresh Token's user doesn't exist",
+      });
+    }
+    // if exists -> generate a new token
+    const { accessToken: newAcessToken, refreshToken: newRefreshToken } =
+      await generateToken(user);
+    logger.info(`Generated new Refresh and Access Token for user: ${user._id}`);
+    
+    // Delete the old refresh token
+    await RefreshToken.deleteOne({ _id: storedRefreshToken._id });
+    
+    return res.status(201).json({
+      success: true,
+      message: "User Generated new Refresh Token Successfully",
+      newAcessToken,
+      newRefreshToken,
+      userId: user._id,
+    });
+  } catch (error) {
+    logger.error("Refresh Token Generation Error Occured", error);
+    res.status(500).json({
+      success: false,
+      message: "Internal Server Error",
+    });
+  }
+};
 
 // Logout
+const logoutUser = async (req, res) => {
+  logger.info("Logout Endpoint Hit ...");
+  try {
+    // Check if refresh token existed in req.body
+    // Delete refresh token from database
+  } catch (error) {
+    logger.error("Refresh Token Generation Error Occured", error);
+    res.status(500).json({
+      success: false,
+      message: "Internal Server Error",
+    });
+  }
+};
 
-export { registerUser, loginUser };
+export { registerUser, loginUser, refreshTokenUser, logoutUser };
