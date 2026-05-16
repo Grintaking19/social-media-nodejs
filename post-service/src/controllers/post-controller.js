@@ -3,6 +3,7 @@ import logger from "../utils/logger.js";
 const createPost = async (req, res) => {
   try {
     // fetch content and mediaIDs from req
+    const { content, mediaIDs } = req.body;
     // create a new Post
   } catch (error) {
     logger.error("Error Creating Post", error);
