@@ -3,10 +3,7 @@ import logger from "../utils/logger.js";
 const createPost = async (req, res) => {
   try {
     // fetch content and mediaIDs from req
-
     // create a new Post
-
-    
   } catch (error) {
     logger.error("Error Creating Post", error);
     res.status(500).json({
@@ -27,7 +24,6 @@ const getAllPosts = async (req, res) => {
   }
 };
 
-
 const getPost = async (req, res) => {
   try {
   } catch (error) {
@@ -38,7 +34,6 @@ const getPost = async (req, res) => {
     });
   }
 };
-
 
 const deletePost = async (req, res) => {
   try {
@@ -51,6 +46,4 @@ const deletePost = async (req, res) => {
   }
 };
 
-
-
-export { createPost, getAllPosts, getPost };
+export { createPost, getAllPosts, getPost, deletePost };
