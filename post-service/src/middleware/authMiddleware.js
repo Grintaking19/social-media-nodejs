@@ -1,11 +1,10 @@
 import logger from "../utils/logger.js";
 
 const authenticateRequest = (req, res, next) => {
-  // Get userId
   const userId = req.header("x-user-id");
-  // if doesn't exists => log error in request and logger
+
   if (!userId) {
-    logger.warn("Unauthorized: Please Login to continue");
+    logger.warn("Unauthorized: Access Attemped without user ID");
     return res.status(401).json({
       success: false,
       message: "Unauthorized: Please Login to continue",
