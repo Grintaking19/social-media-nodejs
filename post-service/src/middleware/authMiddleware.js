@@ -5,14 +5,14 @@ const authenticateRequest = (req, res, next) => {
   const userId = req.header("x-user-id");
   // if doesn't exists => log error in request and logger
   if (!userId) {
-    logger.warn("Unauthorized request: Missing x-user-id header");
+    logger.warn("Unauthorized: Please Login to continue");
     return res.status(401).json({
       success: false,
-      message: "Unauthorized: Missing x-user-id header",
+      message: "Unauthorized: Please Login to continue",
     });
   }
   // Assign userId to the request
-  req.userId = userId;
+  req.user = { userId };
 
   next();
 };

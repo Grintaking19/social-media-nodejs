@@ -1,10 +1,20 @@
 import logger from "../utils/logger.js";
-
+import Post from "../models/Post.js";
 const createPost = async (req, res) => {
   try {
     // fetch content and mediaIDs from req
     const { content, mediaIDs } = req.body;
     // create a new Post
+    const newPost = await Post.create({
+      user: req.user.userId,
+      content,
+      mediaIDs: mediaIDs || [],
+    });
+    logger.info("Post Created Successfully", newPost);
+    res.status(201).json({
+      success: true,
+      message: "Post Created Successfully",
+    });
   } catch (error) {
     logger.error("Error Creating Post", error);
     res.status(500).json({
