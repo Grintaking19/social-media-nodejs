@@ -24,6 +24,7 @@ const createPost = async (req, res) => {
   }
 };
 
+// Implement Post Fetching
 const getAllPosts = async (req, res) => {
   try {
   } catch (error) {
@@ -46,6 +47,7 @@ const getPost = async (req, res) => {
   }
 };
 
+// Implement Post Deletion
 const deletePost = async (req, res) => {
   try {
   } catch (error) {
