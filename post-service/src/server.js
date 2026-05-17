@@ -23,6 +23,18 @@ connectDB();
 // Redis Client
 const redisClient = new Redis(process.env.REDIS_URL);
 
+// Middleware Needed:
+app.use(helmet());
+app.use(cors());
+app.use(express.json());
+
+// logger for request method - url - body
+app.use((req, res, next) => {
+  logger.info(`Received method: ${req.method}, URL: ${req.url}`);
+  logger.info(`Request Body: ${JSON.stringify(req.body)}`);
+  next();
+});
+
 //  RateLimiter for sensitive endpoints and IP rate limiting for DDOS attacks
 const ipRateLimiter = new RateLimiterRedis({
   storeClient: redisClient,
@@ -51,21 +63,17 @@ const apiRateLimiter = rateLimit({
     sendCommand: (command, ...args) => redisClient.call(command, ...args),
   }),
 });
-// Middleware Needed:
-app.use(helmet());
-app.use(cors());
-app.use(express.json());
-
-// logger for request method - url - body
-app.use((req, res, next) => {
-  logger.info(`Received method: ${req.method}, URL: ${req.url}`);
-  logger.info(`Request Body: ${JSON.stringify(req.body)}`);
-  next();
-});
 
 // routes -> pass redisClient to routes
+app.use((req, res, next) => {
+  redisClient
+    .connect()
+    .catch(logger.error("Error in connecting to Redis Client"));
+  req.redis = redisClient;
+  next();
+});
 //  /api/posts
-
+app.use("/api/post", postRoutes);
 // errorHandler
 
 // Listen for port
