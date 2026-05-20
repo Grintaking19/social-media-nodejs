@@ -5,7 +5,7 @@ import cors from "cors";
 import { RateLimiterRedis } from "rate-limiter-flexible";
 import { rateLimit } from "express-rate-limit";
 import { RedisStore } from "rate-limit-redis";
-import Redis from "ioredis";
+import redisClient from "./database/redis.js"
 import helmet from "helmet";
 import errorHandler from "./middleware/errorHandler.js";
 import { connectDB, disconnectDB } from "./database/db.js";
@@ -20,8 +20,6 @@ const PORT = process.env.PORT || 3002;
 // Connect to mongoDB
 connectDB();
 
-// Redis Client
-const redisClient = new Redis(process.env.REDIS_URL);
 
 // Middleware Needed:
 app.use(helmet());
@@ -75,13 +73,13 @@ const routeRateLimiter = rateLimit({
 });
 
 // Pass the Redis client to routes via middleware
-app.use((req, res, next) => {
-  redisClient
-    .connect()
-    .catch(logger.error("Error in connecting to Redis Client"));
-  req.redis = redisClient;
-  next();
-});
+// app.use((req, res, next) => {
+//   redisClient
+//     .connect()
+//     .catch(logger.error("Error in connecting to Redis Client"));
+//   req.redis = redisClient;
+//   next();
+// });
 
 app.use("/api/post", postRoutes);
 
