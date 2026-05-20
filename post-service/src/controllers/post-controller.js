@@ -1,5 +1,7 @@
 import logger from "../utils/logger.js";
 import Post from "../models/Post.js";
+
+
 const createPost = async (req, res) => {
   try {
     // fetch content and mediaIDs from req
