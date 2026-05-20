@@ -1,4 +1,4 @@
-import logger from "../../../post-service/src/utils/logger";
+import logger from "../utils/logger.js";
 import jwt from "jsonwebtoken";
 const validateToken = (req, res, next) => {
   const authHeader = req.headers["authorization"];
