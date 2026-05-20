@@ -28,14 +28,12 @@ app.use(helmet());
 app.use(cors());
 app.use(express.json());
 
-// logger for request method - url - body
 app.use((req, res, next) => {
   logger.info(`Received method: ${req.method}, URL: ${req.url}`);
   logger.info(`Request Body: ${JSON.stringify(req.body)}`);
   next();
 });
 
-//  RateLimiter for sensitive endpoints and IP rate limiting for DDOS attacks
 const ipRateLimiter = new RateLimiterRedis({
   storeClient: redisClient,
   keyPrefix: "middleware",
@@ -43,9 +41,21 @@ const ipRateLimiter = new RateLimiterRedis({
   duration: 60,
 });
 
-app.use((req, res, next) => {});
+// Use IP-based rate limiter for all routes
+app.use((req, res, next) => {
+  ipRateLimiter
+    .consume(req.ip)
+    .then(() => next())
+    .catch(() => {
+      logger.warn(`Rate Limit exceeded for IP : ${req.ip}`);
+      res.status(429).json({
+        success: false,
+        message: "Too Many Requests Have Been Sent",
+      });
+    });
+});
 
-const apiRateLimiter = rateLimit({
+const routeRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 10,
   standardHeaders: true,
@@ -64,7 +74,7 @@ const apiRateLimiter = rateLimit({
   }),
 });
 
-// routes -> pass redisClient to routes
+// Pass the Redis client to routes via middleware
 app.use((req, res, next) => {
   redisClient
     .connect()
@@ -72,12 +82,46 @@ app.use((req, res, next) => {
   req.redis = redisClient;
   next();
 });
-//  /api/posts
-app.use("/api/post", postRoutes);
-// errorHandler
 
-// Listen for port
+app.use("/api/post", postRoutes);
+
+app.use(errorHandler);
+
+const server = app.listen(PORT, () => {
+  logger.info(`Post Service is running on port ${PORT}`);
+});
 
 // Implement Service/proxy factory for api-gateway
 
 // Event Emitters for unhandled rejections
+// Unhandled promise rejections (e.g. missing await on DB connect)
+process.on("unhandledRejection", (err) => {
+  console.error("Unhandled Rejection:", err);
+  server.close(async () => {
+    await disconnectDB();
+    process.exit(0);
+  });
+});
+
+// Uncaught synchronous exceptions
+process.on("uncaughtException", async (err) => {
+  console.error("Uncaught Exception:", err);
+  await disconnectDB();
+  process.exit(0);
+});
+
+// Cloud/container shutdown (Heroku, Docker, PM2...)
+process.on("SIGTERM", () => {
+  server.close(async () => {
+    await disconnectDB();
+    process.exit(0);
+  });
+});
+
+// Local shutdown (Ctrl+C, nodemon restarts)
+process.on("SIGINT", () => {
+  server.close(async () => {
+    await disconnectDB();
+    process.exit(0);
+  });
+});
