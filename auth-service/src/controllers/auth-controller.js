@@ -6,11 +6,13 @@ import {
 import User from "../models/User.js";
 import generateToken from "../utils/generateToken.js";
 import RefreshToken from "../models/RefreshToken.js";
+import redisClient from "../database/redisClient.js";
 
-// User Registration
+// ----------------------------------------
+// USER REGISTRATION
+// ----------------------------------------
 const registerUser = async (req, res) => {
-  // Implementation for user registration
-  logger.info("Registration endpoint hit...");
+  logger.info("Register endpoint hit...");
   try {
     const { error, value } = validateRegistration(req.body);
     if (error) {
@@ -28,7 +30,9 @@ const registerUser = async (req, res) => {
       $or: [{ email: email }, { username: username }],
     });
     if (userExists) {
-      logger.warn("User Alreaady Exists !!");
+      logger.warn(
+        `Registration failed - email or username already exists : ${email} | ${username}`,
+      );
       return res.status(409).json({
         success: false,
         message: "This Email Or Username Already Exists",
@@ -44,8 +48,7 @@ const registerUser = async (req, res) => {
       password,
     });
     await newUser.save();
-    logger.info("User Saved Successfully", newUser._id);
-
+    logger.info(`User registered — id: ${newUser._id}`);
     // Generate Access and Refresh Tokens
     const { accessToken, refreshToken } = await generateToken(newUser);
 
@@ -54,6 +57,7 @@ const registerUser = async (req, res) => {
       message: "User Created Successfully",
       accessToken,
       refreshToken,
+      userId: newUser._id,
     });
   } catch (error) {
     logger.error("Registration Error Occured", error);
@@ -64,7 +68,9 @@ const registerUser = async (req, res) => {
   }
 };
 
-// User Login
+// ----------------------------------------
+// USER LOGIN
+// ----------------------------------------
 const loginUser = async (req, res) => {
   logger.info("Login endpoint hit...");
   try {
@@ -83,7 +89,7 @@ const loginUser = async (req, res) => {
       email: email,
     });
     if (!user) {
-      logger.warn(`Login attempt with non-existent email: ${email}`);
+      logger.warn(`Login failed - email not found : ${email}`);
       return res.status(401).json({
         success: false,
         message: "Invalid email or password",
@@ -93,13 +99,15 @@ const loginUser = async (req, res) => {
     // Check Password Correctness
     const isValidPassword = await user.comparePassword(password);
     if (!isValidPassword) {
-      logger.warn(`Login attempt with non-existent email: ${email}`);
+      logger.warn(`Login failed — wrong password for: ${email}`);
       return res.status(401).json({
         success: false,
         message: "Invalid email or password",
       });
     }
 
+    // Each login starts a BRAND NEW family - Fresh Session
+    // Indepentant from any prev session
     const { accessToken, refreshToken } = await generateToken(user);
 
     res.status(200).json({
@@ -118,7 +126,9 @@ const loginUser = async (req, res) => {
   }
 };
 
-// Refresh Token
+// ----------------------------------------
+// REFRESH TOKEN
+// ----------------------------------------
 const refreshTokenUser = async (req, res) => {
   logger.info("Refresh Token Endpoint Hit ...");
   try {
@@ -137,36 +147,74 @@ const refreshTokenUser = async (req, res) => {
       token: refreshToken,
     });
 
-    if (!storedRefreshToken || storedRefreshToken.expiresAt < new Date()) {
+    if (!storedRefreshToken) {
       logger.warn(
         `Refresh Token (${storedRefreshToken.token}) Doesn't Exists or Expired`,
       );
-      return res.status(400).json({
+      // Chech if this is a recently rotated token whose family we stored in Redis
+      const family = await redisClient.get(`rotated_refresh:${refreshToken}`);
+      if (family) {
+        const deleted = await RefreshToken.deleteMany({ family });
+        logger.warn(
+          `🚨 Token reuse detected — family: ${family} | purged ${deleted.deletedCount} token(s)`,
+        );
+        await redisClient.del(`rotated_refresh:${refreshToken}`);
+      } else {
+        // if Token not in MongoDB or Redis - Completely unkown token
+        logger.warn(`Unkown Refresh Token Attempt: ${refreshToken}`); // This could be a sign of attack or misuse
+      }
+      return res.status(401).json({
         success: false,
-        message: "Refresh Token doesn't Exist or Expired",
+        message: "Invalid token. Please log in again.",
       });
     }
+
+    // -- Token found, but expired -------
+    if (storedRefreshToken.expiresAt < new Date()) {
+      logger.warn(
+        `Refresh Token (${storedRefreshToken.token}) Expired at ${storedRefreshToken.expiresAt}`,
+      );
+      await RefreshToken.deleteOne({ _id: storedRefreshToken._id }); // Clean up expired token
+      return res.status(401).json({
+        success: false,
+        message: "Refresh Token expired. Please log in again.",
+      });
+    }
+
     // Check if token's user still exists
     const user = await User.findById(storedRefreshToken.user);
     if (!user) {
-      return res.status(400).json({
+      await RefreshToken.deleteOne({ family: storedRefreshToken.family }); // Clean up all tokens from this family
+      logger.warn(
+        `Refresh Token's user doesn't exist anymore. Token family (${storedRefreshToken.family}) has been purged.`,
+      );
+      return res.status(401).json({
         success: false,
-        message: "Refresh Token's user doesn't exist",
+        message:
+          "User associated with this token no longer exists. Please log in again.",
       });
     }
-    // if exists -> generate a new token
-    const { accessToken: newAcessToken, refreshToken: newRefreshToken } =
-      await generateToken(user);
-    logger.info(`Generated new Refresh and Access Token for user: ${user._id}`);
+
+    // -- Rotate Token: Generate new tokens and delete the old one --
+    await RefreshToken.deleteOne({ _id: storedRefreshToken._id }); // Delete the old refresh token to prevent reuse
+
+    const { accessToken, refreshToken: newRefreshToken } = await generateToken(
+      user,
+      storedRefreshToken.family, // keep the same family chain
+      refreshToken, // old token → stored in Redis for 24h for reuse detection
+    );
+    logger.info(
+      `Tokens rotated — user: ${user._id} | family: ${storedRefreshToken.family}`,
+    );
 
     // Delete the old refresh token
     await RefreshToken.deleteOne({ _id: storedRefreshToken._id });
 
-    return res.status(201).json({
+    return res.status(200).json({
       success: true,
-      message: "User Generated new Refresh Token Successfully",
-      newAcessToken,
-      newRefreshToken,
+      message: "Tokens refreshed successfully",
+      accessToken,
+      refreshToken: newRefreshToken,
       userId: user._id,
     });
   } catch (error) {
@@ -178,12 +226,14 @@ const refreshTokenUser = async (req, res) => {
   }
 };
 
-// Logout
+// ----------------------------------------
+// USER LOGOUT
+// ----------------------------------------
 const logoutUser = async (req, res) => {
   logger.info("Logout Endpoint Hit ...");
   try {
     // Check if refresh token existed in req.body
-    const { refreshToken } = req.body;
+    const { refreshToken, accessToken } = req.body;
     if (!refreshToken) {
       logger.warn("Refresh Token Missing in Request Body");
       return res.status(400).json({
@@ -192,20 +242,32 @@ const logoutUser = async (req, res) => {
       });
     }
 
-    // const checkRefreshToken = await RefreshToken.findOne({token: refreshToken});
-    // if (!checkRefreshToken || checkRefreshToken.expiresAt < new Date()){
-    //   logger.warn(
-    //     `Refresh Token (${storedRefreshToken.token}) Doesn't Exists or Expired`,
-    //   );
-    //   return res.status(400).json({
-    //     success: false,
-    //     message: "Refresh Token doesn't Exist or Expired",
-    //   });
-    // }
-
-    // Delete refresh token from database
+    // -- Delete refresh token from database
     await RefreshToken.deleteOne({ token: refreshToken });
     logger.info(`Refresh token deleted for logout`);
+
+    // -- Blacklist Access Token by its jti (if provided) --
+    if (accessToken) {
+      try {
+        const decoded = jwt.verify(accessToken, process.env.JWT_SECRET);
+        const jti = decoded.jti;
+        // Store the jti in Redis with a TTL equal to the remaining time of the token
+        const expiresIn = decoded.exp * 1000 - Date.now();
+        if (expiresIn > 0) {
+          await redisClient.set(`blacklist_access:${jti}`, "true", {
+            EX: Math.ceil(expiresIn / 1000),
+          });
+          logger.info(
+            `Access token blacklisted until ${new Date(decoded.exp * 1000)}`,
+          );
+        }
+      } catch (err) {
+        logger.warn(
+          "Invalid access token provided during logout, skipping blacklist",
+        );
+      }
+    }
+
     res.status(200).json({
       success: true,
       message: "User Logged out Successfully.",

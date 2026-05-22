@@ -10,17 +10,12 @@ import { RateLimiterRedis } from "rate-limiter-flexible";
 import { rateLimit } from "express-rate-limit";
 import { RedisStore } from "rate-limit-redis";
 import errorHandler from "./middleware/errorHandler.js";
-
+import redisClient from "./database/redisClient.js";
 dotenv.config();
 
 // Create App for auth-service
 const app = express();
 const PORT = process.env.PORT || 3001;
-
-// Redis Client
-const redisClient = new Redis(process.env.REDIS_URL);
-
-
 
 // Connect to MongoDB
 connectDB()
@@ -96,7 +91,6 @@ app.use("/api/auth", authRoutes);
 const server = app.listen(PORT, () => {
   logger.info(`Auth Service is running on Port ${PORT}`);
 });
-
 
 // Unhandled promise rejections (e.g. missing await on DB connect)
 process.on("unhandledRejection", (err) => {
