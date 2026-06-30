@@ -16,7 +16,7 @@ const generateToken = async (user, family = null, oldToken = null) => {
     username: user.username,
     jti,
   };
-
+  
   const accessToken = jwt.sign(payload, process.env.JWT_SECRET, options);
 
   // -- Refresh Token ---------
@@ -35,7 +35,7 @@ const generateToken = async (user, family = null, oldToken = null) => {
 
   // -- Record rotated token in redis -----------
   // When a token is rotated, we keep a short-lived redis record mapping
-  // oldToken -> family. If that alread-deleted token shows up again.
+  // oldToken -> family. If that already-deleted token shows up again.
   // we can still find its family and nuke the entire session.
   // 24 TTL is enough to cover network retires and a meaningful theft window
 

@@ -7,6 +7,7 @@ import User from "../models/User.js";
 import generateToken from "../utils/generateToken.js";
 import RefreshToken from "../models/RefreshToken.js";
 import redisClient from "../database/redisClient.js";
+import jwt from "jsonwebtoken";
 
 // ----------------------------------------
 // USER REGISTRATION
@@ -149,7 +150,7 @@ const refreshTokenUser = async (req, res) => {
 
     if (!storedRefreshToken) {
       logger.warn(
-        `Refresh Token (${storedRefreshToken.token}) Doesn't Exists or Expired`,
+        `Refresh Token (${refreshToken}) Doesn't Exists or Expired`,
       );
       // Chech if this is a recently rotated token whose family we stored in Redis
       const family = await redisClient.get(`rotated_refresh:${refreshToken}`);
@@ -184,7 +185,7 @@ const refreshTokenUser = async (req, res) => {
     // Check if token's user still exists
     const user = await User.findById(storedRefreshToken.user);
     if (!user) {
-      await RefreshToken.deleteOne({ family: storedRefreshToken.family }); // Clean up all tokens from this family
+      await RefreshToken.deleteMany({ family: storedRefreshToken.family }); // Clean up all tokens from this family
       logger.warn(
         `Refresh Token's user doesn't exist anymore. Token family (${storedRefreshToken.family}) has been purged.`,
       );
