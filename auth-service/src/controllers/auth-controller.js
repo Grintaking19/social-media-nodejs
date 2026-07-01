@@ -163,8 +163,30 @@ const refreshTokenUser = async (req, res) => {
         logger.warn(
           `🚨 Token reuse detected — family: ${family} | purged ${deleted.deletedCount} token(s)`,
         );
-        
         await redisClient.del(`rotated_refresh:${oldTokenHash}`);
+        
+        // Blacklist the access token if provided and valid
+        if (accessToken) {
+          try {
+            const decoded = jwt.verify(accessToken, process.env.JWT_SECRET);
+            const jti = decoded.jti;
+            // Store the jti in Redis with a TTL equal to the remaining time of the token
+            const expiresIn = decoded.exp * 1000 - Date.now();
+            if (expiresIn > 0) {
+              await redisClient.set(`blacklist_access:${jti}`, "true", {
+                EX: Math.ceil(expiresIn / 1000),
+              });
+              logger.info(
+                `Access token blacklisted because of refresh token reuse until ${new Date(decoded.exp * 1000)}`,
+              );
+            }
+          } catch (err) {
+            logger.warn(
+              "Invalid access token provided during refresh token reuse, skipping blacklist",
+            );
+          }
+        }
+
       } else {
         // if Token not in MongoDB or Redis - Completely unkown token
         logger.warn(`Unkown Refresh Token Attempt: ${refreshToken}`); // This could be a sign of attack or misuse
@@ -201,20 +223,22 @@ const refreshTokenUser = async (req, res) => {
       });
     }
 
-    // -- Rotate Token: Generate new tokens and delete the old one --
-    await RefreshToken.deleteOne({ _id: storedRefreshToken._id }); // Delete the old refresh token to prevent reuse
+    // -- Rotate Token:
+    // --- Generate new access and refresh tokens, keeping the same family chain
+    // --- If successful, delete the old refresh token to prevent reuse
+    
 
     const { accessToken, refreshToken: newRefreshToken } = await generateToken(
       user,
       storedRefreshToken.family, // keep the same family chain
       refreshToken, // old token → stored in Redis for 24h for reuse detection
     );
+
+    await RefreshToken.deleteOne({ _id: storedRefreshToken._id }); // Delete the old refresh token to prevent reuse
+
     logger.info(
       `Tokens rotated — user: ${user._id} | family: ${storedRefreshToken.family}`,
     );
-
-    // Delete the old refresh token
-    await RefreshToken.deleteOne({ _id: storedRefreshToken._id });
 
     return res.status(200).json({
       success: true,
@@ -223,6 +247,7 @@ const refreshTokenUser = async (req, res) => {
       refreshToken: newRefreshToken,
       userId: user._id,
     });
+    
   } catch (error) {
     logger.error("Refresh Token Generation Error Occured", error);
     res.status(500).json({
