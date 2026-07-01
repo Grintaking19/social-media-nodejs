@@ -144,8 +144,10 @@ const refreshTokenUser = async (req, res) => {
       });
     }
     // Check your stored Token if exists or  Expired -> Logged warning and 401 Error
+    const hashToken = crypto.createHash("sha256").update(refreshToken).digest("hex");
+    
     const storedRefreshToken = await RefreshToken.findOne({
-      token: refreshToken,
+      hashToken: hashToken,
     });
 
     if (!storedRefreshToken) {
@@ -153,13 +155,15 @@ const refreshTokenUser = async (req, res) => {
         `Refresh Token (${refreshToken}) Doesn't Exists or Expired`,
       );
       // Chech if this is a recently rotated token whose family we stored in Redis
-      const family = await redisClient.get(`rotated_refresh:${refreshToken}`);
+      const oldTokenHash = crypto.createHash("sha256").update(refreshToken).digest("hex");
+      const family = await redisClient.get(`rotated_refresh:${oldTokenHash}`);
       if (family) {
         const deleted = await RefreshToken.deleteMany({ family });
         logger.warn(
           `🚨 Token reuse detected — family: ${family} | purged ${deleted.deletedCount} token(s)`,
         );
-        await redisClient.del(`rotated_refresh:${refreshToken}`);
+        
+        await redisClient.del(`rotated_refresh:${oldTokenHash}`);
       } else {
         // if Token not in MongoDB or Redis - Completely unkown token
         logger.warn(`Unkown Refresh Token Attempt: ${refreshToken}`); // This could be a sign of attack or misuse
@@ -243,8 +247,11 @@ const logoutUser = async (req, res) => {
       });
     }
 
+    // Hash the refresh token to match the stored hash
+    const hashToken = crypto.createHash("sha256").update(refreshToken).digest("hex");
+
     // -- Delete refresh token from database
-    await RefreshToken.deleteOne({ token: refreshToken });
+    await RefreshToken.deleteOne({ hashToken });
     logger.info(`Refresh token deleted for logout`);
 
     // -- Blacklist Access Token by its jti (if provided) --

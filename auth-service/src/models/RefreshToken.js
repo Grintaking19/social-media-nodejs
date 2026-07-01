@@ -2,7 +2,7 @@ import mongoose from "mongoose";
 
 const refreshTokenSchema = new mongoose.Schema(
   {
-    token: {
+    hashToken: {
       type: String,
       required: true,
       unique: true,
