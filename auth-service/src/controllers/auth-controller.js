@@ -8,6 +8,7 @@ import generateToken from "../utils/generateToken.js";
 import RefreshToken from "../models/RefreshToken.js";
 import redisClient from "../database/redisClient.js";
 import jwt from "jsonwebtoken";
+import crypto from "crypto";
 
 // ----------------------------------------
 // USER REGISTRATION
@@ -177,7 +178,7 @@ const refreshTokenUser = async (req, res) => {
     // -- Token found, but expired -------
     if (storedRefreshToken.expiresAt < new Date()) {
       logger.warn(
-        `Refresh Token (${storedRefreshToken.token}) Expired at ${storedRefreshToken.expiresAt}`,
+        `Refresh Token (${storedRefreshToken.hashToken}) Expired at ${storedRefreshToken.expiresAt}`,
       );
       await RefreshToken.deleteOne({ _id: storedRefreshToken._id }); // Clean up expired token
       return res.status(401).json({
