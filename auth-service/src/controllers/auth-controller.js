@@ -165,8 +165,9 @@ const refreshTokenUser = async (req, res) => {
         );
         await redisClient.del(`rotated_refresh:${oldTokenHash}`);
         
-        // Blacklist the access token if provided and valid
-        if (accessToken) {
+        // Blacklist the access token if provided and valid (handling edge case - Optional)
+        const { accessToken } = req.body;
+        if (accessToken ) {
           try {
             const decoded = jwt.verify(accessToken, process.env.JWT_SECRET);
             const jti = decoded.jti;
@@ -247,7 +248,7 @@ const refreshTokenUser = async (req, res) => {
       refreshToken: newRefreshToken,
       userId: user._id,
     });
-    
+
   } catch (error) {
     logger.error("Refresh Token Generation Error Occured", error);
     res.status(500).json({

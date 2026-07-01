@@ -90,7 +90,7 @@ app.use(
   validateToken,
   proxy(process.env.POST_SERVICE_URL, {
     ...proxyOptions,
-    proxyReqBodyDecorator: (proxyReqOpts, srcReq) => {
+    proxyReqOptDecorator: (proxyReqOpts, srcReq) => {
       proxyReqOpts.headers["Content-Type"] = "application/json";
       proxyReqOpts.headers["x-user-id"] = srcReq.user.userId;
       return proxyReqOpts;
