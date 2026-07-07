@@ -1,5 +1,4 @@
 import express from "express";
-import Redis from "ioredis";
 import cors from "cors";
 import helmet from "helmet";
 import dotenv from "dotenv";
@@ -9,14 +8,12 @@ import logger from "./utils/logger.js";
 import proxy from "express-http-proxy";
 import errorHandler from "./middleware/errorHandler.js";
 import validateToken from "./middleware/authMiddleware.js";
+import redisClient from "./database/redisClient.js";
 
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT;
-
-// Redis Client
-const redisClient = new Redis(process.env.REDIS_URL);
 
 // Middlewares
 app.use(helmet());

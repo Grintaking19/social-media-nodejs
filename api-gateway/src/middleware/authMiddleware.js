@@ -1,6 +1,8 @@
 import logger from "../utils/logger.js";
 import jwt from "jsonwebtoken";
-const validateToken = (req, res, next) => {
+import redisClient from "../database/redisClient.js";
+
+const validateToken = async (req, res, next) => {
   const authHeader = req.headers["authorization"];
   const token = authHeader && authHeader.split(" ")[1];
 
@@ -11,38 +13,29 @@ const validateToken = (req, res, next) => {
       message: "Authentication required",
     });
   }
-  // Check if the token is blacklisted in Redis
-  redisClient.get(`blacklist_access:${token}`, (err, result) => {
-    if (err) {
-      logger.error("Redis error while checking token blacklist:", err);
-      return res.status(500).json({
-        success: false,
-        message: "Internal server error",
-      });
-    }
-    if (result) {
+  try {
+    const user = jwt.verify(token, process.env.JWT_SECRET);
+
+    // Check the JWT id (jti), not the raw token string.
+    const isBlacklisted = await redisClient.get(`blacklist_access:${user.jti}`);
+
+    if (isBlacklisted) {
       logger.warn("Blacklisted token used for access attempt");
       return res.status(401).json({
         success: false,
         message: "Token has been revoked. Please login again.",
       });
     }
-  });
 
-  // Verify the token using the secret key
-  jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
-    if (err) {
-      logger.warn(`Invalid token provided: ${err.message}`);
-      return res.status(401).json({
-        success: false,
-        message: "Invalid or expired token",
-      });
-    }
     req.user = user;
-    next();
-  });
-
-  
+    return next();
+  } catch (err) {
+    logger.warn(`Invalid token provided: ${err.message}`);
+    return res.status(401).json({
+      success: false,
+      message: "Invalid or expired token",
+    });
+  }
 };
 
 export default validateToken;
